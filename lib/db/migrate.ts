@@ -21,8 +21,7 @@ async function migrate() {
   console.log('Found migration files:', migrationFiles.join(', '));
 
   for (const file of migrationFiles) {
-    console.log('
-Running migration:', file);
+    console.log('Running migration:', file);
     const migrationSQL = readFileSync(join(migrationsDir, file), 'utf-8');
 
     const statements = migrationSQL
@@ -45,8 +44,7 @@ Running migration:', file);
     }
   }
 
-  console.log('
-All migrations complete!');
+  console.log('All migrations complete!');
   await sql.end();
 }
 
