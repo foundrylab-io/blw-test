@@ -8,7 +8,7 @@ if (!url) {
   process.exit(1);
 }
 
-const sql = postgres(url, { prepare: false, ssl: { rejectUnauthorized: false }, max: 1 });
+const sql = postgres(url, { prepare: false, max: 1 });
 
 async function migrate() {
   const migrationsDir = join(__dirname, 'migrations');
