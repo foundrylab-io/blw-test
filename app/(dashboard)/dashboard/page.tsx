@@ -1,287 +1,298 @@
-'use client';
-
+import { redirect } from 'next/navigation';
+import Link from 'next/link';
+import { db } from '@/lib/db/drizzle';
+import { getUser } from '@/lib/db/queries';
+import { clients, projects, proposals, invoices, activityLogs } from '@/lib/db/schema';
+import { eq, desc, sql, count, sum } from 'drizzle-orm';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardFooter
-} from '@/components/ui/card';
-import { customerPortalAction } from '@/lib/payments/actions';
-import { useActionState } from 'react';
-import { TeamDataWithMembers, User } from '@/lib/db/schema';
-import { removeTeamMember, inviteTeamMember } from '@/app/(login)/actions';
-import useSWR from 'swr';
-import { Suspense } from 'react';
-import { Input } from '@/components/ui/input';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Label } from '@/components/ui/label';
-import { Loader2, PlusCircle } from 'lucide-react';
+import { 
+  Users, 
+  Briefcase, 
+  FileText, 
+  Receipt, 
+  Plus, 
+  DollarSign,
+  Clock,
+  Activity 
+} from 'lucide-react';
 
-type ActionState = {
-  error?: string;
-  success?: string;
-};
+export default async function DashboardPage() {
+  const user = await getUser();
+  if (!user) redirect('/sign-in');
+  const currentUser = user;
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+  // Fetch stats
+  const [
+    clientsCount,
+    projectsCount,
+    proposalsCount,
+    invoicesCount,
+    totalRevenue,
+    recentProposals,
+    recentInvoices,
+    recentActivity
+  ] = await Promise.all([
+    db
+      .select({ count: count() })
+      .from(clients)
+      .where(eq(clients.userId, currentUser.id))
+      .then(result => result[0]?.count ?? 0),
+    
+    db
+      .select({ count: count() })
+      .from(projects)
+      .where(eq(projects.userId, currentUser.id))
+      .then(result => result[0]?.count ?? 0),
+    
+    db
+      .select({ count: count() })
+      .from(proposals)
+      .where(eq(proposals.userId, currentUser.id))
+      .then(result => result[0]?.count ?? 0),
+    
+    db
+      .select({ count: count() })
+      .from(invoices)
+      .where(eq(invoices.userId, currentUser.id))
+      .then(result => result[0]?.count ?? 0),
+    
+    db
+      .select({ total: sum(invoices.totalAmount) })
+      .from(invoices)
+      .where(eq(invoices.userId, currentUser.id))
+      .then(result => result[0]?.total ?? '0'),
+    
+    db
+      .select({
+        id: proposals.id,
+        title: proposals.title,
+        status: proposals.status,
+        totalAmount: proposals.totalAmount,
+        createdAt: proposals.createdAt
+      })
+      .from(proposals)
+      .where(eq(proposals.userId, currentUser.id))
+      .orderBy(desc(proposals.createdAt))
+      .limit(5),
+    
+    db
+      .select({
+        id: invoices.id,
+        invoiceNumber: invoices.invoiceNumber,
+        title: invoices.title,
+        status: invoices.status,
+        totalAmount: invoices.totalAmount,
+        createdAt: invoices.createdAt
+      })
+      .from(invoices)
+      .where(eq(invoices.userId, currentUser.id))
+      .orderBy(desc(invoices.createdAt))
+      .limit(5),
+    
+    db
+      .select({
+        id: activityLogs.id,
+        action: activityLogs.action,
+        timestamp: activityLogs.timestamp
+      })
+      .from(activityLogs)
+      .where(eq(activityLogs.userId, currentUser.id))
+      .orderBy(desc(activityLogs.timestamp))
+      .limit(5)
+  ]);
 
-function SubscriptionSkeleton() {
   return (
-    <Card className="mb-8 h-[140px]">
-      <CardHeader>
-        <CardTitle>Team Subscription</CardTitle>
-      </CardHeader>
-    </Card>
-  );
-}
+    <div className="p-6">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold">Welcome to ClientDesk</h1>
+        <p className="text-gray-600 mt-2">
+          Manage your clients, projects, and proposals all in one place
+        </p>
+      </div>
 
-function ManageSubscription() {
-  const { data: teamData } = useSWR<TeamDataWithMembers>('/api/team', fetcher);
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Clients</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{clientsCount}</div>
+          </CardContent>
+        </Card>
 
-  return (
-    <Card className="mb-8">
-      <CardHeader>
-        <CardTitle>Team Subscription</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
-            <div className="mb-4 sm:mb-0">
-              <p className="font-medium">
-                Current Plan: {teamData?.planName || 'Free'}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {teamData?.subscriptionStatus === 'active'
-                  ? 'Billed monthly'
-                  : teamData?.subscriptionStatus === 'trialing'
-                  ? 'Trial period'
-                  : 'No active subscription'}
-              </p>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Projects</CardTitle>
+            <Briefcase className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{projectsCount}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Proposals</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{proposalsCount}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              ${(parseFloat(totalRevenue ?? '0')).toFixed(2)}
             </div>
-            <form action={customerPortalAction}>
-              <Button type="submit" variant="outline">
-                Manage Subscription
-              </Button>
-            </form>
-          </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Link href="/clients">
+            <Button className="w-full h-20 flex flex-col gap-2">
+              <Users className="h-6 w-6" />
+              <span>Manage Clients</span>
+            </Button>
+          </Link>
+          <Link href="/projects">
+            <Button className="w-full h-20 flex flex-col gap-2" variant="outline">
+              <Briefcase className="h-6 w-6" />
+              <span>View Projects</span>
+            </Button>
+          </Link>
+          <Link href="/proposals">
+            <Button className="w-full h-20 flex flex-col gap-2" variant="outline">
+              <FileText className="h-6 w-6" />
+              <span>Create Proposal</span>
+            </Button>
+          </Link>
+          <Link href="/invoices">
+            <Button className="w-full h-20 flex flex-col gap-2" variant="outline">
+              <Receipt className="h-6 w-6" />
+              <span>Generate Invoice</span>
+            </Button>
+          </Link>
         </div>
-      </CardContent>
-    </Card>
-  );
-}
+      </div>
 
-function TeamMembersSkeleton() {
-  return (
-    <Card className="mb-8 h-[140px]">
-      <CardHeader>
-        <CardTitle>Team Members</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="animate-pulse space-y-4 mt-1">
-          <div className="flex items-center space-x-4">
-            <div className="size-8 rounded-full bg-gray-200"></div>
-            <div className="space-y-2">
-              <div className="h-4 w-32 bg-gray-200 rounded"></div>
-              <div className="h-3 w-14 bg-gray-200 rounded"></div>
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function TeamMembers() {
-  const { data: teamData } = useSWR<TeamDataWithMembers>('/api/team', fetcher);
-  const [removeState, removeAction, isRemovePending] = useActionState<
-    ActionState,
-    FormData
-  >(removeTeamMember, {});
-
-  const getUserDisplayName = (user: Pick<User, 'id' | 'name' | 'email'>) => {
-    return user.name || user.email || 'Unknown User';
-  };
-
-  if (!teamData?.teamMembers?.length) {
-    return (
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle>Team Members</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">No team members yet.</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card className="mb-8">
-      <CardHeader>
-        <CardTitle>Team Members</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ul className="space-y-4">
-          {teamData.teamMembers.map((member, index) => (
-            <li key={member.id} className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <Avatar>
-                  {/* 
-                    This app doesn't save profile images, but here
-                    is how you'd show them:
-
-                    <AvatarImage
-                      src={member.user.image || ''}
-                      alt={getUserDisplayName(member.user)}
-                    />
-                  */}
-                  <AvatarFallback>
-                    {getUserDisplayName(member.user)
-                      .split(' ')
-                      .map((n) => n[0])
-                      .join('')}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium">
-                    {getUserDisplayName(member.user)}
-                  </p>
-                  <p className="text-sm text-muted-foreground capitalize">
-                    {member.role}
-                  </p>
-                </div>
-              </div>
-              {index > 1 ? (
-                <form action={removeAction}>
-                  <input type="hidden" name="memberId" value={member.id} />
-                  <Button
-                    type="submit"
-                    variant="outline"
-                    size="sm"
-                    disabled={isRemovePending}
-                  >
-                    {isRemovePending ? 'Removing...' : 'Remove'}
-                  </Button>
-                </form>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-        {removeState?.error && (
-          <p className="text-red-500 mt-4">{removeState.error}</p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function InviteTeamMemberSkeleton() {
-  return (
-    <Card className="h-[260px]">
-      <CardHeader>
-        <CardTitle>Invite Team Member</CardTitle>
-      </CardHeader>
-    </Card>
-  );
-}
-
-function InviteTeamMember() {
-  const { data: user } = useSWR<User>('/api/user', fetcher);
-  const isOwner = user?.role === 'owner';
-  const [inviteState, inviteAction, isInvitePending] = useActionState<
-    ActionState,
-    FormData
-  >(inviteTeamMember, {});
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Invite Team Member</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form action={inviteAction} className="space-y-4">
-          <div>
-            <Label htmlFor="email" className="mb-2">
-              Email
-            </Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              placeholder="Enter email"
-              required
-              disabled={!isOwner}
-            />
-          </div>
-          <div>
-            <Label>Role</Label>
-            <RadioGroup
-              defaultValue="member"
-              name="role"
-              className="flex space-x-4"
-              disabled={!isOwner}
-            >
-              <div className="flex items-center space-x-2 mt-2">
-                <RadioGroupItem value="member" id="member" />
-                <Label htmlFor="member">Member</Label>
-              </div>
-              <div className="flex items-center space-x-2 mt-2">
-                <RadioGroupItem value="owner" id="owner" />
-                <Label htmlFor="owner">Owner</Label>
-              </div>
-            </RadioGroup>
-          </div>
-          {inviteState?.error && (
-            <p className="text-red-500">{inviteState.error}</p>
-          )}
-          {inviteState?.success && (
-            <p className="text-green-500">{inviteState.success}</p>
-          )}
-          <Button
-            type="submit"
-            className="bg-orange-500 hover:bg-orange-600 text-white"
-            disabled={isInvitePending || !isOwner}
-          >
-            {isInvitePending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Inviting...
-              </>
+      {/* Recent Activity Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent Proposals */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Recent Proposals
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {recentProposals.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">No proposals yet</p>
             ) : (
-              <>
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Invite Member
-              </>
+              <div className="space-y-3">
+                {recentProposals.map((proposal) => (
+                  <div key={proposal.id} className="flex justify-between items-center p-3 rounded-lg border">
+                    <div>
+                      <p className="font-medium">{proposal.title ?? 'Untitled'}</p>
+                      <p className="text-sm text-gray-500 capitalize">{proposal.status ?? 'draft'}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold">${(parseFloat(proposal.totalAmount ?? '0')).toFixed(2)}</p>
+                      <p className="text-xs text-gray-500">
+                        {new Intl.DateTimeFormat('en-US', { 
+                          month: 'short', 
+                          day: 'numeric' 
+                        }).format(new Date(proposal.createdAt))}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
-          </Button>
-        </form>
-      </CardContent>
-      {!isOwner && (
-        <CardFooter>
-          <p className="text-sm text-muted-foreground">
-            You must be a team owner to invite new members.
-          </p>
-        </CardFooter>
-      )}
-    </Card>
-  );
-}
+          </CardContent>
+        </Card>
 
-export default function SettingsPage() {
-  return (
-    <section className="flex-1 p-4 lg:p-8">
-      <h1 className="text-lg lg:text-2xl font-medium mb-6">Team Settings</h1>
-      <Suspense fallback={<SubscriptionSkeleton />}>
-        <ManageSubscription />
-      </Suspense>
-      <Suspense fallback={<TeamMembersSkeleton />}>
-        <TeamMembers />
-      </Suspense>
-      <Suspense fallback={<InviteTeamMemberSkeleton />}>
-        <InviteTeamMember />
-      </Suspense>
-    </section>
+        {/* Recent Invoices */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5" />
+              Recent Invoices
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {recentInvoices.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">No invoices yet</p>
+            ) : (
+              <div className="space-y-3">
+                {recentInvoices.map((invoice) => (
+                  <div key={invoice.id} className="flex justify-between items-center p-3 rounded-lg border">
+                    <div>
+                      <p className="font-medium">{invoice.invoiceNumber ?? 'N/A'}</p>
+                      <p className="text-sm text-gray-500">{invoice.title ?? 'Untitled'}</p>
+                      <p className="text-xs text-gray-500 capitalize">{invoice.status ?? 'draft'}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold">${(parseFloat(invoice.totalAmount ?? '0')).toFixed(2)}</p>
+                      <p className="text-xs text-gray-500">
+                        {new Intl.DateTimeFormat('en-US', { 
+                          month: 'short', 
+                          day: 'numeric' 
+                        }).format(new Date(invoice.createdAt))}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent Activity Log */}
+      {recentActivity.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5" />
+              Recent Activity
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {recentActivity.map((activity) => (
+                <div key={activity.id} className="flex items-center gap-3 p-2 rounded-lg border">
+                  <Clock className="h-4 w-4 text-gray-400" />
+                  <div className="flex-1">
+                    <p className="text-sm">{(activity.action ?? '').replace('_', ' ').toLowerCase()}</p>
+                    <p className="text-xs text-gray-500">
+                      {new Intl.DateTimeFormat('en-US', { 
+                        month: 'short', 
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit'
+                      }).format(new Date(activity.timestamp))}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }
