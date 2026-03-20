@@ -7,6 +7,7 @@ import {
   integer,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
+import { boolean, numeric } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
@@ -140,3 +141,274 @@ export enum ActivityType {
   INVITE_TEAM_MEMBER = 'INVITE_TEAM_MEMBER',
   ACCEPT_INVITATION = 'ACCEPT_INVITATION',
 }
+
+
+export const clients = pgTable('clients', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id),
+  name: varchar('name', { length: 100 }).notNull(),
+  companyName: varchar('company_name', { length: 100 }),
+  email: varchar('email', { length: 255 }).notNull(),
+  phone: varchar('phone', { length: 20 }),
+  website: varchar('website', { length: 255 }),
+  address: text('address'),
+  notes: text('notes').notNull().default(''),
+  status: varchar('status', { length: 20 }).notNull().default('active'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const projects = pgTable('projects', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id),
+  clientId: integer('client_id')
+    .notNull()
+    .references(() => clients.id),
+  name: varchar('name', { length: 100 }).notNull(),
+  description: text('description').notNull().default(''),
+  status: varchar('status', { length: 20 }).notNull().default('draft'),
+  startDate: timestamp('start_date'),
+  endDate: timestamp('end_date'),
+  budget: numeric('budget').notNull().default('0'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const proposals = pgTable('proposals', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id),
+  clientId: integer('client_id')
+    .notNull()
+    .references(() => clients.id),
+  projectId: integer('project_id').references(() => projects.id),
+  title: varchar('title', { length: 100 }).notNull(),
+  description: text('description').notNull().default(''),
+  status: varchar('status', { length: 20 }).notNull().default('draft'),
+  totalAmount: numeric('total_amount').notNull().default('0'),
+  validUntil: timestamp('valid_until'),
+  sentAt: timestamp('sent_at'),
+  acceptedAt: timestamp('accepted_at'),
+  rejectedAt: timestamp('rejected_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const proposalItems = pgTable('proposal_items', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id),
+  proposalId: integer('proposal_id')
+    .notNull()
+    .references(() => proposals.id),
+  name: varchar('name', { length: 100 }).notNull(),
+  description: text('description').notNull().default(''),
+  quantity: numeric('quantity').notNull().default('1'),
+  unitPrice: numeric('unit_price').notNull().default('0'),
+  totalPrice: numeric('total_price').notNull().default('0'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const invoices = pgTable('invoices', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id),
+  clientId: integer('client_id')
+    .notNull()
+    .references(() => clients.id),
+  projectId: integer('project_id').references(() => projects.id),
+  proposalId: integer('proposal_id').references(() => proposals.id),
+  invoiceNumber: varchar('invoice_number', { length: 50 }).notNull(),
+  title: varchar('title', { length: 100 }).notNull(),
+  description: text('description').notNull().default(''),
+  status: varchar('status', { length: 20 }).notNull().default('draft'),
+  subtotal: numeric('subtotal').notNull().default('0'),
+  taxRate: numeric('tax_rate').notNull().default('0'),
+  taxAmount: numeric('tax_amount').notNull().default('0'),
+  totalAmount: numeric('total_amount').notNull().default('0'),
+  issueDate: timestamp('issue_date').notNull().defaultNow(),
+  dueDate: timestamp('due_date'),
+  sentAt: timestamp('sent_at'),
+  paidAt: timestamp('paid_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const invoiceItems = pgTable('invoice_items', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id),
+  invoiceId: integer('invoice_id')
+    .notNull()
+    .references(() => invoices.id),
+  name: varchar('name', { length: 100 }).notNull(),
+  description: text('description').notNull().default(''),
+  quantity: numeric('quantity').notNull().default('1'),
+  unitPrice: numeric('unit_price').notNull().default('0'),
+  totalPrice: numeric('total_price').notNull().default('0'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const files = pgTable('files', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id),
+  projectId: integer('project_id')
+    .notNull()
+    .references(() => projects.id),
+  name: varchar('name', { length: 255 }).notNull(),
+  originalName: varchar('original_name', { length: 255 }).notNull(),
+  mimeType: varchar('mime_type', { length: 100 }).notNull(),
+  size: integer('size').notNull(),
+  url: text('url').notNull(),
+  description: text('description').notNull().default(''),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const branding = pgTable('branding', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id),
+  companyName: varchar('company_name', { length: 100 }).notNull(),
+  primaryColor: varchar('primary_color', { length: 7 }).notNull().default('#000000'),
+  logoUrl: text('logo_url'),
+  website: varchar('website', { length: 255 }),
+  address: text('address'),
+  phone: varchar('phone', { length: 20 }),
+  email: varchar('email', { length: 255 }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const clientsRelations = relations(clients, ({ one, many }) => ({
+  user: one(users, {
+    fields: [clients.userId],
+    references: [users.id],
+  }),
+  projects: many(projects),
+  proposals: many(proposals),
+  invoices: many(invoices),
+}));
+
+export const projectsRelations = relations(projects, ({ one, many }) => ({
+  user: one(users, {
+    fields: [projects.userId],
+    references: [users.id],
+  }),
+  client: one(clients, {
+    fields: [projects.clientId],
+    references: [clients.id],
+  }),
+  proposals: many(proposals),
+  invoices: many(invoices),
+  files: many(files),
+}));
+
+export const proposalsRelations = relations(proposals, ({ one, many }) => ({
+  user: one(users, {
+    fields: [proposals.userId],
+    references: [users.id],
+  }),
+  client: one(clients, {
+    fields: [proposals.clientId],
+    references: [clients.id],
+  }),
+  project: one(projects, {
+    fields: [proposals.projectId],
+    references: [projects.id],
+  }),
+  items: many(proposalItems),
+  invoices: many(invoices),
+}));
+
+export const proposalItemsRelations = relations(proposalItems, ({ one }) => ({
+  user: one(users, {
+    fields: [proposalItems.userId],
+    references: [users.id],
+  }),
+  proposal: one(proposals, {
+    fields: [proposalItems.proposalId],
+    references: [proposals.id],
+  }),
+}));
+
+export const invoicesRelations = relations(invoices, ({ one, many }) => ({
+  user: one(users, {
+    fields: [invoices.userId],
+    references: [users.id],
+  }),
+  client: one(clients, {
+    fields: [invoices.clientId],
+    references: [clients.id],
+  }),
+  project: one(projects, {
+    fields: [invoices.projectId],
+    references: [projects.id],
+  }),
+  proposal: one(proposals, {
+    fields: [invoices.proposalId],
+    references: [proposals.id],
+  }),
+  items: many(invoiceItems),
+}));
+
+export const invoiceItemsRelations = relations(invoiceItems, ({ one }) => ({
+  user: one(users, {
+    fields: [invoiceItems.userId],
+    references: [users.id],
+  }),
+  invoice: one(invoices, {
+    fields: [invoiceItems.invoiceId],
+    references: [invoices.id],
+  }),
+}));
+
+export const filesRelations = relations(files, ({ one }) => ({
+  user: one(users, {
+    fields: [files.userId],
+    references: [users.id],
+  }),
+  project: one(projects, {
+    fields: [files.projectId],
+    references: [projects.id],
+  }),
+}));
+
+export const brandingRelations = relations(branding, ({ one }) => ({
+  user: one(users, {
+    fields: [branding.userId],
+    references: [users.id],
+  }),
+}));
+
+export type Client = typeof clients.$inferSelect;
+export type NewClient = typeof clients.$inferInsert;
+export type Project = typeof projects.$inferSelect;
+export type NewProject = typeof projects.$inferInsert;
+export type Proposal = typeof proposals.$inferSelect;
+export type NewProposal = typeof proposals.$inferInsert;
+export type ProposalItem = typeof proposalItems.$inferSelect;
+export type NewProposalItem = typeof proposalItems.$inferInsert;
+export type Invoice = typeof invoices.$inferSelect;
+export type NewInvoice = typeof invoices.$inferInsert;
+export type InvoiceItem = typeof invoiceItems.$inferSelect;
+export type NewInvoiceItem = typeof invoiceItems.$inferInsert;
+export type File = typeof files.$inferSelect;
+export type NewFile = typeof files.$inferInsert;
+export type Branding = typeof branding.$inferSelect;
+export type NewBranding = typeof branding.$inferInsert;
